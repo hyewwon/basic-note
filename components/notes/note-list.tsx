@@ -33,18 +33,24 @@ import { NoteCard } from "./note-card";
 interface NoteListProps {
   categoryId?: string | null;
   title?: string;
+  uncategorized?: boolean;
 }
 
 export function NoteList({
   categoryId,
   title,
+  uncategorized = false,
 }: NoteListProps) {
   const { t } = useLanguage();
   const displayTitle = title ?? t("nav.allNotes");
-  const { notes, isLoading, createNote } = useNotes(categoryId);
-  const headerCount = useNotesCount(categoryId);
+  const { notes, isLoading, createNote } = useNotes(categoryId, { uncategorized });
+  // Uncategorized view counts notes with no category (null bucket).
+  const headerCount = useNotesCount(uncategorized ? null : categoryId);
   const { updateCategory, deleteCategoryWithNotes } = useCategories();
-  useLoadingIndicator(`note-list:${categoryId ?? "all"}`, isLoading);
+  useLoadingIndicator(
+    `note-list:${uncategorized ? "uncategorized" : categoryId ?? "all"}`,
+    isLoading
+  );
   const router = useRouter();
   const [showFirstConfirm, setShowFirstConfirm] = useState(false);
   const [showSecondConfirm, setShowSecondConfirm] = useState(false);

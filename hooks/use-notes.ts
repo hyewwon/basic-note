@@ -16,7 +16,10 @@ export interface DecryptedNote extends Note {
   preview: string;
 }
 
-export function useNotes(categoryId?: string | null) {
+export function useNotes(
+  categoryId?: string | null,
+  options?: { uncategorized?: boolean }
+) {
   const { encryptText, decryptText, isUnlocked } = useCrypto();
   // Cache (ciphertext → plaintext) so list re-renders don't redecrypt every
   // title/preview on every DB change.
@@ -25,7 +28,10 @@ export function useNotes(categoryId?: string | null) {
     if (!isUnlocked) decryptCacheRef.current.clear();
   }, [isUnlocked]);
 
-  const queryKey = categoryId ?? null;
+  const uncategorized = options?.uncategorized ?? false;
+  // Distinct key so the stale-detection window works for the uncategorized
+  // view (its filter differs from the "all notes" view, which also keys null).
+  const queryKey = uncategorized ? "__uncategorized__" : categoryId ?? null;
 
   // Wrap the result with the queryKey it was computed for. When categoryId
   // changes, useLiveQuery briefly keeps the previous value before the new
@@ -35,15 +41,16 @@ export function useNotes(categoryId?: string | null) {
     async () => {
       const all = await db.notes.orderBy("updatedAt").reverse().toArray();
       const active = all.filter((n) => !n.deletedAt);
-      const filtered =
-        categoryId !== undefined && categoryId !== null
-          ? active.filter((n) => n.categoryId === categoryId)
-          : active;
+      const filtered = uncategorized
+        ? active.filter((n) => !n.categoryId)
+        : categoryId !== undefined && categoryId !== null
+        ? active.filter((n) => n.categoryId === categoryId)
+        : active;
       const pinned = filtered.filter((n) => n.pinned);
       const unpinned = filtered.filter((n) => !n.pinned);
       return { key: queryKey, notes: [...pinned, ...unpinned] };
     },
-    [categoryId]
+    [categoryId, uncategorized]
   );
 
   const rawNotes = rawResult?.notes;

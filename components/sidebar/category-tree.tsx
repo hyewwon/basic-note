@@ -16,9 +16,10 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@plus-experience/design-system/ui/collapsible";
-import { Folder, ChevronRight } from "lucide-react";
+import { Folder, ChevronRight, FileText } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCategories } from "@/hooks/use-categories";
+import { useNotesCount } from "@/components/providers/notes-count-provider";
 import type { CategoryTreeNode } from "@/lib/types";
 
 function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: number }) {
@@ -37,13 +38,17 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
               <span>{node.name}</span>
             </SidebarMenuButton>
           </CollapsibleTrigger>
+          <SidebarMenuBadge>{node.noteCount}</SidebarMenuBadge>
           <CollapsibleContent>
             <SidebarMenuSub>
               {/* Link to this category's notes */}
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton asChild isActive={isActive}>
                   <Link href={`/notes/categories/${node.id}`}>
-                    {t("categories.allNotes")}
+                    <span>{t("categories.allNotes")}</span>
+                    <span className="ml-auto text-muted-foreground tabular-nums">
+                      {node.noteCount}
+                    </span>
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
@@ -54,7 +59,10 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
                     isActive={pathname === `/notes/categories/${child.id}`}
                   >
                     <Link href={`/notes/categories/${child.id}`}>
-                      {child.name}
+                      <span>{child.name}</span>
+                      <span className="ml-auto text-muted-foreground tabular-nums">
+                        {child.noteCount}
+                      </span>
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
@@ -74,6 +82,36 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
           <span>{node.name}</span>
         </Link>
       </SidebarMenuButton>
+      <SidebarMenuBadge>{node.noteCount}</SidebarMenuBadge>
+    </SidebarMenuItem>
+  );
+}
+
+// Notes with no category. Distinct from a real folder: muted, FileText icon,
+// and only rendered when non-empty (an empty uncategorized bucket is noise).
+function UncategorizedItem() {
+  const pathname = usePathname();
+  const { t } = useLanguage();
+  const count = useNotesCount(null);
+
+  if (!count) return null;
+
+  const isActive = pathname === "/notes/categories/uncategorized";
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        tooltip={t("categories.uncategorized")}
+        className="text-muted-foreground"
+      >
+        <Link href="/notes/categories/uncategorized">
+          <FileText className="h-4 w-4" />
+          <span>{t("categories.uncategorized")}</span>
+        </Link>
+      </SidebarMenuButton>
+      <SidebarMenuBadge>{count}</SidebarMenuBadge>
     </SidebarMenuItem>
   );
 }
@@ -81,8 +119,9 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
 export function CategoryTree() {
   const { tree } = useCategories();
   const { t } = useLanguage();
+  const uncategorizedCount = useNotesCount(null);
 
-  if (tree.length === 0) {
+  if (tree.length === 0 && !uncategorizedCount) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
@@ -100,6 +139,7 @@ export function CategoryTree() {
       {tree.map((node) => (
         <CategoryNode key={node.id} node={node} />
       ))}
+      <UncategorizedItem />
     </SidebarMenu>
   );
 }
