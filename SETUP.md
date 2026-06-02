@@ -47,8 +47,7 @@
 3. **Run** 클릭 → `Success. No rows returned`이 뜨면 완료입니다.
 
 > [!TIP]
-> 테이블 2개(`encrypted_entities`, `app_settings`) + RLS 정책 + Realtime 설정이 한 번에 들어갑니다.
-> **여러 번 실행해도 안전합니다(멱등)** — 같은 SQL을 다시 돌려도 한 번 돌린 것과 결과가 같습니다.
+> 테이블 2개(`encrypted_entities`, `app_settings`) + RLS 정책 + Realtime 설정이 한 번에 들어갑니다. 같은 SQL을 다시 돌려도 한 번 돌린 것과 결과가 같습니다.
 
 ### 1-3. API 값 확보
 
