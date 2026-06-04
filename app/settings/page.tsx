@@ -675,6 +675,9 @@ export default function SettingsPage() {
       <div className="text-center text-xs text-muted-foreground pb-6 space-y-1">
         <div>{t("settings.footer")}</div>
         <div>© 2026 PlusX basic note</div>
+        <div className="font-mono">
+          v{(process.env.NEXT_PUBLIC_APP_VERSION || "dev").slice(0, 7)}
+        </div>
       </div>
     </div>
   );
