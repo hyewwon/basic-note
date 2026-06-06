@@ -1,8 +1,16 @@
 // Version comes from the registration query (?v=<commit-sha>), so every deploy
-// gets a fresh cache name — old caches are purged on activate and the shell is
-// re-precached from the new build.
+// gets a fresh shell cache name — old shell caches are purged on activate and
+// the shell is re-precached from the new build.
+//
+// Static assets (/_next/static/*) live in a SEPARATE, version-independent cache
+// that is NOT purged on activate. This is what keeps offline working across
+// deploys: a new deploy changes the chunk hashes, but old chunks survive as a
+// fallback and new chunks are precached at install time (see below) instead of
+// only being cached lazily on first request. Without this, activate wiped every
+// chunk and an offline user hit a cache-miss on the new build's JS → blank app.
 const SW_VERSION = new URL(self.location.href).searchParams.get("v") || "v3";
 const CACHE_NAME = "basic-note-" + SW_VERSION;
+const STATIC_CACHE = "basic-note-static";
 
 // Shell routes that must work fully offline. We precache BOTH variants:
 //  - the HTML document (full page load / PWA cold start)
@@ -22,11 +30,43 @@ const isRscRequest = (request, url) =>
 const isShellPath = (pathname) =>
   pathname === "/notes" || pathname === "/notes/note";
 
+const isStaticAsset = (request) =>
+  /\.(js|css|woff2?|ttf|png|jpg|svg|ico)(\?.*)?$/.test(request.url) ||
+  request.url.includes("/_next/static/");
+
+// Pull every /_next/static JS/CSS URL referenced by a shell HTML document
+// (script src + link href, incl. prefetch). These are the chunks the page
+// needs to boot; precaching them is what makes the app usable offline.
+function extractStaticAssets(html) {
+  const urls = new Set();
+  const re = /(?:src|href)="(\/_next\/static\/[^"]+\.(?:js|css))"/g;
+  let m;
+  while ((m = re.exec(html))) urls.add(m[1]);
+  return [...urls];
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      await cache.addAll(SHELL_DOC_URLS);
+      const staticCache = await caches.open(STATIC_CACHE);
+      const assetUrls = new Set();
+
+      // Precache shell documents AND harvest the static chunks they reference.
+      await Promise.all(
+        SHELL_DOC_URLS.map(async (path) => {
+          try {
+            const res = await fetch(path, { credentials: "same-origin" });
+            if (!res.ok) return;
+            await cache.put(path, res.clone());
+            const html = await res.text();
+            extractStaticAssets(html).forEach((u) => assetUrls.add(u));
+          } catch {
+            // offline during install — best effort
+          }
+        })
+      );
+
       // Precache RSC payloads by requesting each route with the RSC header.
       await Promise.all(
         SHELL_RSC_URLS.map(async (path) => {
@@ -37,7 +77,21 @@ self.addEventListener("install", (event) => {
             });
             if (res.ok) await cache.put(rscKey(path), res);
           } catch {
-            // offline during install — best effort
+            // best effort
+          }
+        })
+      );
+
+      // Precache the harvested static chunks into the shared cache so the new
+      // build boots offline immediately after this install completes.
+      await Promise.all(
+        [...assetUrls].map(async (u) => {
+          try {
+            if (await staticCache.match(u)) return; // already cached
+            const res = await fetch(u, { credentials: "same-origin" });
+            if (res.ok) await staticCache.put(u, res);
+          } catch {
+            // best effort
           }
         })
       );
@@ -50,7 +104,11 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys
+          // Purge old SHELL caches only; keep the current shell cache and the
+          // version-independent static-asset cache (the offline fallback).
+          .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE)
+          .map((key) => caches.delete(key))
       )
     )
   );
@@ -93,6 +151,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Cache-first for static assets (JS, CSS, fonts, images). Look across all
+  // caches (the shared static cache holds chunks from this and prior deploys),
+  // and store newly fetched ones in the version-independent static cache.
+  if (isStaticAsset(request)) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((response) => {
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+            return response;
+          })
+      )
+    );
+    return;
+  }
+
   // Network-first for navigation (other HTML pages)
   if (request.mode === "navigate") {
     event.respondWith(
@@ -105,25 +181,6 @@ self.addEventListener("fetch", (event) => {
         .catch(() =>
           caches.match(request).then((cached) => cached || caches.match("/"))
         )
-    );
-    return;
-  }
-
-  // Cache-first for static assets (JS, CSS, fonts, images)
-  if (
-    request.url.match(/\.(js|css|woff2?|ttf|png|jpg|svg|ico)(\?.*)?$/) ||
-    request.url.includes("/_next/static/")
-  ) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-            return response;
-          })
-      )
     );
     return;
   }
