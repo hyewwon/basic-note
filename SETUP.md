@@ -171,7 +171,8 @@
 > 그런 릴리스에는 별도 공지로 안내하며, [`supabase/setup.sql`](./supabase/setup.sql)을 **다시 실행**하면 됩니다(멱등이라 안전).
 
 > [!NOTE]
-> Pull 봇은 본인 Fork를 원본과 **동일하게** 유지합니다(hard reset). Fork의 코드를 직접 수정하지 마세요 — 설정값은 코드가 아니라 Vercel 환경변수에 있습니다.
+> Pull 봇은 원본의 새 변경분을 본인 Fork에 **자동으로 합쳐(merge)** 항상 최신 코드와 동일한 내용으로 유지합니다.
+> **Fork의 코드를 직접 수정하지 마세요** — 코드를 건드리면 원본과 충돌이 나 자동 동기화가 멈출 수 있습니다. 설정값은 코드가 아니라 Vercel 환경변수에 두면 됩니다.
 
 ---
 
@@ -184,6 +185,7 @@
 | "복호화 실패" 항목이 보임 | 다른 마스터 키로 암호화된 데이터가 섞임. 보통 dev/prod가 같은 Supabase를 공유할 때 발생. 개발용 Supabase를 분리하세요. |
 | 첫 화면에 비밀번호 설정이 아니라 잠금/복구 화면이 뜸 | 해당 Supabase에 이미 다른 비밀번호로 만든 데이터가 있습니다. 그 비밀번호로 unlock하거나, 설정에서 전체 초기화 후 다시 시작하세요. |
 | GitHub Fork는 최신인데 웹 앱이 옛 버전 그대로 / 배포가 `awaiting authorization` | **Git Fork Protection**이 켜져 있어 Pull 봇 동기화 커밋의 배포가 막힌 것. **Settings → Security → `Git Fork Protection` 끄기**(4단계 3번). 이미 막힌 배포는 Vercel **Deployments → Create Deployment → `main`** 으로 한 번 올리거나, 막힌 배포의 **Authorize** 버튼을 누르면 해제됩니다. |
+| Fork·빌드는 최신인데 라이브만 옛 버전 / 최신 배포가 **`Production`**이 아니라 **`Preview`** 로만 떠 있음 | 그 커밋이 본배포로 승격되지 않은 상태. **Vercel → Deployments → 최신 배포 행 우측 `⋯` → `Promote to Production`** 한 번이면 즉시 라이브에 반영됩니다(재빌드 아님). 옛 버전 Fork에서 한 번 나타날 수 있고, 이후 동기화부터는 자동으로 Production에 올라갑니다. |
 | 오프라인에서 노트 진입/생성이 안 됨 (새 배포 직후) | 새 버전 코드를 아직 못 받은 상태. **온라인에서 앱을 한 번 열면** 서비스워커가 새 버전을 받아 캐시하며, 이후 오프라인에서 정상 동작합니다. |
 | 빌드 실패 | Node 18+ 필요. Vercel은 기본 충족. 로컬이면 `node -v` 확인. |
 
